@@ -69,4 +69,29 @@ reject --force
 grep -q 'Existing file' "$target/workflow-commit" || fail 'Replaced regular file'
 echo 'PASS: symlink and non-directory protection'
 
+
+agent_target="$scratch/agent target"
+agent_installer="$scripts_dir/install_agents.sh"
+agent_source="$scripts_dir/../agents/roadmap_design.toml"
+bash "$agent_installer" --target "$agent_target" --dry-run >"$output"
+[[ ! -e "$agent_target" ]] || fail 'Agent preview wrote files'
+bash "$agent_installer" --target "$agent_target" >"$output"
+cmp -s "$agent_source" "$agent_target/roadmap_design.toml" || fail 'Agent installation differs'
+bash "$agent_installer" --target "$agent_target" >"$output"
+grep -q '^unchanged ' "$output" || fail 'Repeat agent install changed files'
+printf '\n# Local edit\n' >> "$agent_target/roadmap_design.toml"
+code=0
+bash "$agent_installer" --target "$agent_target" >"$output" 2>&1 || code=$?
+[[ "$code" == 2 ]] || fail 'Agent conflict was not rejected'
+bash "$agent_installer" --target "$agent_target" --force --dry-run >"$output"
+grep -q 'Local edit' "$agent_target/roadmap_design.toml" || fail 'Agent preview overwrote edits'
+bash "$agent_installer" --target "$agent_target" --force >"$output"
+cmp -s "$agent_source" "$agent_target/roadmap_design.toml" || fail 'Agent replacement differs'
+rm -- "$agent_target/roadmap_design.toml"
+ln -s "$agent_source" "$agent_target/roadmap_design.toml"
+code=0
+bash "$agent_installer" --target "$agent_target" --force >"$output" 2>&1 || code=$?
+[[ "$code" == 2 && -L "$agent_target/roadmap_design.toml" ]] || fail 'Agent symlink was not protected'
+echo 'PASS: agent preview, install, repeat install, conflict, replacement, and symlink protection'
+
 echo 'All installer checks passed.'
