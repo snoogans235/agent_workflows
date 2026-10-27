@@ -94,4 +94,52 @@ bash "$agent_installer" --target "$agent_target" --force >"$output" 2>&1 || code
 [[ "$code" == 2 && -L "$agent_target/roadmap_design.toml" ]] || fail 'Agent symlink was not protected'
 echo 'PASS: agent preview, install, repeat install, conflict, replacement, and symlink protection'
 
+
+selected_skills="$scratch/selected/skills"
+selected_agents="$scratch/selected/agents"
+select_install() {
+    bash "$scripts_dir/install.sh" --target "$selected_skills" --agents-target "$selected_agents" "$@" >"$output" 2>&1 || { cat "$output" >&2; fail 'Selected installation failed'; }
+}
+select_reject() {
+    local status=0
+    bash "$scripts_dir/install.sh" --target "$selected_skills" --agents-target "$selected_agents" "$@" >"$output" 2>&1 || status=$?
+    [[ "$status" == 2 ]] || { cat "$output" >&2; fail "Expected selected-install rejection, received $status"; }
+}
+select_install --list
+grep -q '^roadmap_design$' "$output" || fail 'Inventory omitted agent'
+[[ ! -e "$selected_skills" && ! -e "$selected_agents" ]] || fail 'Inventory wrote files'
+select_install --agent roadmap_design --prefix workout --dry-run
+[[ ! -e "$selected_skills" && ! -e "$selected_agents" ]] || fail 'Combined preview wrote files'
+select_reject --prefix workout
+select_reject --agent unknown --prefix workout
+select_reject --agent roadmap_design --prefix '../unsafe'
+select_reject --agent roadmap_design --prefix 'bad prefix'
+select_reject --agent roadmap_design --prefix
+[[ ! -e "$selected_skills" && ! -e "$selected_agents" ]] || fail 'Invalid input wrote files'
+select_install --agent roadmap_design --agent roadmap_design --prefix workout --skill workflow-youtrack
+installed_agent="$selected_agents/workout_roadmap_design.toml"
+[[ -f "$installed_agent" && ! -e "$selected_agents/roadmap_design.toml" ]] || fail 'Incorrect prefixed filename'
+grep -Fqx 'name = "workout_roadmap_design"' "$installed_agent" || fail 'Incorrect prefixed identity'
+diff -u <(tail -n +2 "$agent_source") <(tail -n +2 "$installed_agent") || fail 'Prefix changed approved agent behavior'
+for skill in workflow-commit workflow-pr ticket-writing workflow-youtrack; do
+    diff -qr "$source_dir/$skill" "$selected_skills/$skill" >/dev/null || fail 'Shared skill renamed or changed'
+done
+[[ ! -e "$selected_skills/workout_ticket-writing" ]] || fail 'Skill was prefixed'
+select_install --agent roadmap_design --prefix workout --skill workflow-youtrack
+[[ "$(grep -c '^unchanged ' "$output")" == 5 ]] || fail 'Prefixed repeat install changed files'
+select_install --agent roadmap_design --prefix another_project
+[[ -f "$selected_agents/another_project_roadmap_design.toml" && -f "$installed_agent" ]] || fail 'Project installations did not coexist'
+# Preflight must preserve all other destinations if either component type conflicts.
+printf '\n# Local edit\n' >> "$installed_agent"
+rm -rf -- "$selected_skills/workflow-pr"
+select_reject --agent roadmap_design --prefix workout
+[[ ! -e "$selected_skills/workflow-pr" ]] || fail 'Agent conflict allowed skill writes'
+select_install --agent roadmap_design --prefix workout --force --dry-run
+grep -q 'Local edit' "$installed_agent" || fail 'Preview replaced edited agent'
+select_install --agent roadmap_design --prefix workout --force
+grep -q 'Local edit' "$installed_agent" && fail 'Force failed to replace agent'
+printf '\nLocal edit\n' >> "$selected_skills/workflow-commit/SKILL.md"
+select_reject --agent roadmap_design --prefix fresh
+[[ ! -e "$selected_agents/fresh_roadmap_design.toml" ]] || fail 'Skill conflict allowed agent writes'
+echo 'PASS: selections, agent-only prefixes, unchanged instructions, shared skills, project coexistence, and combined conflict preflight'
 echo 'All installer checks passed.'

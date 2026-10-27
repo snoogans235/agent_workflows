@@ -23,21 +23,38 @@ The agent uses ticket-writing and workflow-pr's sizing guidance, plus the integr
 
 ## Installation
 
-Preview and install shared skills:
+List available agents and skills:
 
 ```sh
-bash scripts/install.sh --dry-run
-bash scripts/install.sh
+bash scripts/install.sh --list
 ```
 
-Preview and install agent definitions:
+Select an agent, give its installation a project prefix, and optionally include a tracker skill:
 
 ```sh
-bash scripts/install_agents.sh --dry-run
-bash scripts/install_agents.sh
+bash scripts/install.sh --agent roadmap_design --prefix workout --skill workflow-youtrack --dry-run
+bash scripts/install.sh --agent roadmap_design --prefix workout --skill workflow-youtrack
 ```
 
-Both installers respect CODEX_HOME (default ~/.codex), leave identical copies alone, and refuse differing copies unless --force is supplied. Use --target DIRECTORY to select a custom skills or agents directory for the corresponding installer. The skills installer also accepts repeated --skill NAME selections and includes shared dependencies. Commit installs independently; PR includes commit; YouTrack includes ticket-writing. Ticket-writing also installs independently. The agents installer installs definitions only; it does not select a tracker or install skills.
+This installs `workout_roadmap_design.toml` with `name = "workout_roadmap_design"`. Only the agent's filename and identity change; its approved instructions and all shared skill names remain unchanged. A prefix labels the installation; it does not bind it to a repository path or configure a tracker project. Prefixes start with a lowercase letter and contain lowercase letters, digits, or underscores. Omit --prefix to install the original agent name. Multiple project prefixes can coexist.
+
+Repeat --agent or --skill to select components. The roadmap agent includes ticket-writing and workflow-pr, which includes workflow-commit. YouTrack remains optional and includes ticket-writing when selected. With no selections, install.sh retains its shared-skills-only behavior. Selecting an agent does not automatically install a tracker integration.
+
+Both agent and skill conflicts are checked before either destination is changed. Identical installations are left alone; differing installations require --force after reviewing the differences. Preview with --dry-run. Runtime failures may still leave earlier reported installations complete; this is not an all-or-nothing transaction.
+
+Install selected skills alone:
+
+```sh
+bash scripts/install.sh --skill workflow-commit
+```
+
+For definitions alone, without installing skill dependencies:
+
+```sh
+bash scripts/install_agents.sh --agent roadmap_design --prefix workout --dry-run
+```
+
+Both scripts respect CODEX_HOME (default ~/.codex). The main installer accepts --target DIRECTORY for skills and --agents-target DIRECTORY for agents. The definitions-only installer uses --target DIRECTORY for agents. Preview and --list do not create destination directories. The repository source files and existing unprefixed installations are preserved.
 
 Agent definitions use the standalone TOML format described in the [official OpenAI documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents). They inherit the parent session's model, permissions, and connected tools. The roadmap agent's repository read-only behavior is an instruction boundary, not a separate permissions override.
 
@@ -45,7 +62,7 @@ Agent definitions use the standalone TOML format described in the [official Open
 
 From the consuming product repository, ask:
 
-> Have roadmap_design review the roadmap at [path or link], follow its supporting references, inspect the code and existing tickets, and propose an Epic and small Story breakdown for my review. Use [tracker project] for ticket records.
+> Have workout_roadmap_design review the roadmap at [path or link], follow its supporting references, inspect the code and existing tickets, and propose an Epic and small Story breakdown for my review. Use [tracker project] for ticket records.
 
 Specify authorized roadmap capture when an Epic needs to be created or updated. Detailed Stories follow approval of the proposed breakdown. The agent reports missing evidence, unresolved decisions, and blocked work rather than inventing requirements or readiness.
 

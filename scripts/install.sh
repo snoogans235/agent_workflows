@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Install reusable skills without modifying unrelated skills or agent roles.
+# Install selected agents and shared skills; preserve unrelated installations.
 set -euo pipefail
 
 usage() {
-    echo 'Usage: scripts/install.sh [--dry-run] [--force] [--target DIRECTORY] [--skill NAME ...]'
+    echo 'Usage: scripts/install.sh [--skill NAME ...] [--agent NAME ...] [--prefix PROJECT] [--target SKILLS_DIRECTORY] [--agents-target DIRECTORY] [--dry-run] [--force] [--list]'
 }
 fail() { echo "$*" >&2; exit 2; }
 
@@ -24,24 +24,51 @@ canonical_dir() (
     fi
 )
 
-source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../skills" && pwd -P)"
+scripts_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+source_dir="$(cd -- "$scripts_dir/../skills" && pwd -P)"
 target="${CODEX_HOME:-$HOME/.codex}/skills"
 dry_run=false
 force=false
 selected=()
+agent_selected=()
+agent_target="${CODEX_HOME:-$HOME/.codex}/agents"
+prefix=''
 while (( $# )); do
     case "$1" in
         --dry-run) dry_run=true; shift ;;
         --force) force=true; shift ;;
-        --target|--skill)
+        --target|--skill|--agent|--agents-target|--prefix)
             (( $# >= 2 )) && [[ -n "$2" && "$2" != --* ]] || fail "$1 requires a value"
-            if [[ "$1" == --target ]]; then target="$2"; else selected+=("$2"); fi
+            case "$1" in
+                --target) target="$2" ;;
+                --skill) selected+=("$2") ;;
+                --agent) agent_selected+=("$2") ;;
+                --agents-target) agent_target="$2" ;;
+                --prefix) prefix="$2" ;;
+            esac
             shift 2 ;;
+        --list)
+            echo 'Agents:'
+            bash "$scripts_dir/install_agents.sh" --list
+            echo 'Skills:'
+            for path in "$source_dir"/*; do
+                [[ -f "$path/SKILL.md" ]] && basename -- "$path"
+            done
+            exit 0 ;;
         --help|-h) usage; exit 0 ;;
         *) usage >&2; fail "Unknown argument: $1" ;;
     esac
 done
 
+if [[ -n "$prefix" ]] && (( ${#agent_selected[@]} == 0 )); then
+    fail '--prefix requires at least one --agent selection'
+fi
+for agent in ${agent_selected[@]+"${agent_selected[@]}"}; do
+    case "$agent" in
+        roadmap_design) selected+=(ticket-writing workflow-pr) ;;
+        *) fail "Unknown agent: $agent" ;;
+    esac
+done
 if (( ${#selected[@]} == 0 )); then
     for path in "$source_dir"/*; do
         [[ -d "$path" && -f "$path/SKILL.md" ]] || continue
@@ -94,6 +121,17 @@ for name in "${selected[@]}"; do
     fi
 done
 
+# Preflight both component types before either installer changes a destination.
+agent_options=(--target "$agent_target")
+if [[ -n "$prefix" ]]; then agent_options+=(--prefix "$prefix"); fi
+if [[ "$force" == true ]]; then agent_options+=(--force); fi
+for agent in ${agent_selected[@]+"${agent_selected[@]}"}; do
+    agent_options+=(--agent "$agent")
+done
+if (( ${#agent_selected[@]} > 0 )); then
+    bash "$scripts_dir/install_agents.sh" "${agent_options[@]}" --dry-run >/dev/null
+fi
+
 stage=''
 destination=''
 cleanup() {
@@ -131,6 +169,10 @@ for ((index=0; index<${#selected[@]}; index++)); do
         echo "installed $destination"
     fi
 done
+if (( ${#agent_selected[@]} > 0 )); then
+    if [[ "$dry_run" == true ]]; then agent_options+=(--dry-run); fi
+    bash "$scripts_dir/install_agents.sh" "${agent_options[@]}"
+fi
 if [[ "$dry_run" == true ]]; then
     echo 'Dry run complete; no files written.'
 else
