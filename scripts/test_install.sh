@@ -166,4 +166,32 @@ bash "$scripts_dir/install.sh" --target "$coder_skills" --agents-target "$coder_
     --agent typescript_backend_coder --agent roadmap_design --prefix workout >"$output"
 [[ -f "$coder_installed" && -f "$coder_agents/workout_roadmap_design.toml" ]] || fail 'Multiple-agent selection failed'
 echo 'PASS: coder selection, preview, prefix, intact instructions, dependencies, tracker independence, and repeat installation'
+
+# The language-agnostic tester remains selectable without a coder or tracker.
+tester_skills="$scratch/tester/skills"
+tester_agents="$scratch/tester/agents"
+tester_source="$scripts_dir/../agents/backend_tester.toml"
+bash "$scripts_dir/install.sh" --list >"$output"
+grep -Fqx 'backend_tester' "$output" || fail 'Inventory omitted backend tester'
+bash "$scripts_dir/install.sh" --target "$tester_skills" --agents-target "$tester_agents" \
+    --agent backend_tester --prefix workout --dry-run >"$output"
+[[ ! -e "$tester_skills" && ! -e "$tester_agents" ]] || fail 'Tester preview wrote files'
+bash "$scripts_dir/install.sh" --target "$tester_skills" --agents-target "$tester_agents" \
+    --agent backend_tester --prefix workout >"$output"
+tester_installed="$tester_agents/workout_backend_tester.toml"
+grep -Fqx 'name = "workout_backend_tester"' "$tester_installed" || fail 'Incorrect tester identity'
+diff -u <(tail -n +2 "$tester_source") <(tail -n +2 "$tester_installed") || fail 'Tester instructions changed during installation'
+[[ ! -e "$tester_agents/workout_roadmap_design.toml" && ! -e "$tester_agents/workout_typescript_backend_coder.toml" && ! -e "$tester_skills/workflow-youtrack" ]] || fail 'Tester selection installed unrelated components'
+for skill in ticket-writing workflow-pr workflow-commit; do
+    diff -qr "$source_dir/$skill" "$tester_skills/$skill" >/dev/null || fail 'Missing or different tester dependency'
+done
+bash "$scripts_dir/install.sh" --target "$tester_skills" --agents-target "$tester_agents" \
+    --agent backend_tester --prefix workout >"$output"
+[[ "$(grep -c '^unchanged ' "$output")" == 4 ]] || fail 'Repeat tester install changed files'
+bash "$scripts_dir/install.sh" --target "$tester_skills" --agents-target "$tester_agents" \
+    --agent roadmap_design --agent typescript_backend_coder --agent backend_tester --prefix workout >"$output"
+for agent in roadmap_design typescript_backend_coder backend_tester; do
+    [[ -f "$tester_agents/workout_$agent.toml" ]] || fail 'Three-agent selection failed'
+done
+echo 'PASS: backend tester inventory, selection, preview, prefix, intact instructions, dependencies, tracker independence, and combined installation'
 echo 'All installer checks passed.'

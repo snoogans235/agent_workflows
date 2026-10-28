@@ -67,6 +67,8 @@ for agent in ${agent_selected[@]+"${agent_selected[@]}"}; do
     case "$agent" in
         roadmap_design) selected+=(ticket-writing workflow-pr) ;;
         typescript_backend_coder) selected+=(ticket-writing workflow-pr) ;;
+        backend_tester) selected+=(ticket-writing workflow-pr) ;;
+
 
         *) fail "Unknown agent: $agent" ;;
     esac

@@ -8,8 +8,9 @@ Project-independent coding agents and shared delivery skills. Gnym's definitions
 | --- | --- |
 | `roadmap_design` | Follow a roadmap into supporting specs, diagrams, code, and existing tickets; record an Epic planning summary and create small executable Stories after developer approval. |
 | `typescript_backend_coder` | Implement bounded TypeScript backend tickets with runtime validation, accurate types, reliable side effects, focused checks, and an evidence-backed handoff. |
+| `backend_tester` | Independently verify acceptance, edge, and negative cases; prioritize unit then feature tests and maintain readable workflows, factories, and clients in the project language. |
 
-The roadmap design agent owns discovery and decomposition. The TypeScript backend coder owns implementation and focused verification; independent testing and documentation agents have not been defined here yet. It creates no parallel planning documents in docs/ and does not dispatch implementation.
+The roadmap design agent owns discovery and decomposition. The TypeScript backend coder owns implementation and focused verification. The backend tester owns independent verification and test support. A documentation agent has not been defined here yet. It creates no parallel planning documents in docs/ and does not dispatch implementation.
 
 ## Shared skills
 
@@ -20,7 +21,7 @@ The roadmap design agent owns discovery and decomposition. The TypeScript backen
 | `ticket-writing` | Plain-language ticket titles, descriptions, progress updates, and closure summaries for any tracker. |
 | `workflow-youtrack` | Verified YouTrack ticket operations, progress records, and closure evidence. |
 
-The agents use ticket-writing and workflow-pr, plus the integration skill for the consuming project's tracker. The coder also uses workflow-commit when commit work is authorized. Only YouTrack has an integration skill in this repository today. Another tracker requires its own available integration and operating instructions; missing access is reported rather than simulated.
+The agents use ticket-writing and workflow-pr, plus the integration skill for the consuming project's tracker. The coder and tester also use workflow-commit when commit work is authorized. Only YouTrack has an integration skill in this repository today. Another tracker requires its own available integration and operating instructions; missing access is reported rather than simulated.
 
 ## Installation
 
@@ -39,9 +40,9 @@ bash scripts/install.sh --agent roadmap_design --prefix workout --skill workflow
 
 This installs `workout_roadmap_design.toml` with `name = "workout_roadmap_design"`. Only the agent's filename and identity change; its approved instructions and all shared skill names remain unchanged. A prefix labels the installation; it does not bind it to a repository path or configure a tracker project. Prefixes start with a lowercase letter and contain lowercase letters, digits, or underscores. Omit --prefix to install the original agent name. Multiple project prefixes can coexist.
 
-Repeat --agent or --skill to select components. Both agents include ticket-writing and workflow-pr, which includes workflow-commit. YouTrack remains optional and includes ticket-writing when selected. With no selections, install.sh retains its shared-skills-only behavior. Selecting an agent does not automatically install a tracker integration.
+Repeat --agent or --skill to select components. All three agents include ticket-writing and workflow-pr, which includes workflow-commit. YouTrack remains optional and includes ticket-writing when selected. With no selections, install.sh retains its shared-skills-only behavior. Selecting an agent does not automatically install a tracker integration.
 
-For a TypeScript backend coder, select `--agent typescript_backend_coder` with the desired prefix. Selecting both agents is supported; it does not dispatch either one or define their execution sequence.
+For a TypeScript backend coder, select `--agent typescript_backend_coder`; for the language-agnostic tester, select `--agent backend_tester`. Repeat --agent to select any combination with the desired prefix. Selection does not dispatch agents or define their execution sequence.
 
 Both agent and skill conflicts are checked before either destination is changed. Identical installations are left alone; differing installations require --force after reviewing the differences. Preview with --dry-run. Runtime failures may still leave earlier reported installations complete; this is not an all-or-nothing transaction.
 
@@ -74,6 +75,12 @@ For an implementation assignment after the project has configured its delivery w
 > Have workout_typescript_backend_coder implement [verified ticket], follow the project instructions and linked acceptance criteria, run focused checks, and return evidence for independent testing. Follow the project's existing delivery permissions.
 
 The coder's engineering baseline is strict, accurate types; runtime validation; cohesive functions/modules/classes; practical SOLID principles; explicit asynchronous and side-effect behavior; and focused tests. It does not prescribe a framework, database, branching hierarchy, or permission to publish. Project installation and assignment remain separate actions.
+
+For an independent testing assignment:
+
+> Have workout_backend_tester evaluate [verified ticket] against [implementation candidate]. Cover acceptance criteria, relevant edge and negative cases, prioritize unit then feature coverage, and return reproducible defects and verification evidence. Follow the project's existing delivery permissions.
+
+The tester follows the project's language, framework, and commands. Tests mirror source structure, use behavioral scenario names, and keep assertions visible. Local helpers stay in their test file; shared workflows, factories, and clients are extracted when used across files. Vocabulary: stub for in-memory fixtures, persist for stored fixtures, call for client access, get for reads, and expect for assertions using the native framework. External clients are normally mocked outside acceptance tests; feature tests connect real internal layers where practical. Production defects return to the coder. Test and helper changes remain distinct from product fixes and overall acceptance.
 
 ## Repository contributions
 
