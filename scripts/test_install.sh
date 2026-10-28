@@ -194,4 +194,78 @@ for agent in roadmap_design typescript_backend_coder backend_tester; do
     [[ -f "$tester_agents/workout_$agent.toml" ]] || fail 'Three-agent selection failed'
 done
 echo 'PASS: backend tester inventory, selection, preview, prefix, intact instructions, dependencies, tracker independence, and combined installation'
+
+# Project installation is driven by role mappings, not incidental installed agents.
+project_target="$scratch/project with spaces"
+mkdir -p "$project_target"
+printf '# Test project workflow\n' > "$project_target/AGENTS.md"
+cat > "$project_target/.agent-workflow" <<'CONFIG'
+prefix=sample
+role.coordinator=workflow_coordinator
+role.planner=roadmap_design
+role.coder=typescript_backend_coder
+role.tester=backend_tester
+role.documenter=none
+required_roles=coordinator,coder,tester
+stages=code,test,commit,verify_ticket,publish_pr
+base_branch=main
+branch_policy=ticket_branch
+documentation=when_required
+max_repair_rounds=3
+commit=explicit
+publish_pr=explicit
+merge=explicit
+skill.workflow-youtrack=enabled
+CONFIG
+cp "$project_target/.agent-workflow" "$scratch/valid-project-config"
+project_run() {
+    bash "$scripts_dir/install.sh" --project "$project_target" "$@" >"$output" 2>&1 || { cat "$output" >&2; fail 'Project installation failed'; }
+}
+project_reject() {
+    local status=0
+    bash "$scripts_dir/install.sh" --project "$project_target" "$@" >"$output" 2>&1 || status=$?
+    [[ "$status" == 2 ]] || { cat "$output" >&2; fail "Expected project rejection, received $status"; }
+}
+project_run --dry-run
+[[ ! -e "$project_target/.agents" && ! -e "$project_target/.codex" ]] || fail 'Project preview wrote files'
+project_reject --prefix other
+project_reject --skill workflow-commit
+project_reject --agents-target "$scratch/unsafe-override"
+sed 's/role.tester=backend_tester/role.tester=none/' "$scratch/valid-project-config" > "$project_target/.agent-workflow"
+project_reject
+sed 's/role.coder=typescript_backend_coder/role.coder=unknown/' "$scratch/valid-project-config" > "$project_target/.agent-workflow"
+project_reject
+sed 's/stages=code,test,commit,verify_ticket,publish_pr/stages=code,documentation,publish_pr/' "$scratch/valid-project-config" > "$project_target/.agent-workflow"
+project_reject
+cp "$scratch/valid-project-config" "$project_target/.agent-workflow"
+printf '\nprefix=duplicate\n' >> "$project_target/.agent-workflow"
+project_reject
+cp "$scratch/valid-project-config" "$project_target/.agent-workflow"
+printf '\nbase_branch=$(touch should-not-execute)\n' >> "$project_target/.agent-workflow"
+project_reject
+[[ ! -e "$project_target/.agents" && ! -e "$project_target/.codex" ]] || fail 'Invalid project configuration wrote files'
+cp "$scratch/valid-project-config" "$project_target/.agent-workflow"
+project_run
+for agent in workflow_coordinator roadmap_design typescript_backend_coder backend_tester; do
+    installed="$project_target/.codex/agents/sample_$agent.toml"
+    [[ -f "$installed" ]] || fail 'Project role was not installed'
+    grep -Fqx "name = \"sample_$agent\"" "$installed" || fail 'Project role has incorrect identity'
+    diff -u <(tail -n +2 "$scripts_dir/../agents/$agent.toml") <(tail -n +2 "$installed") || fail 'Project install changed agent instructions'
+done
+for skill in ticket-writing workflow-commit workflow-pr workflow-youtrack; do
+    diff -qr "$source_dir/$skill" "$project_target/.agents/skills/$skill" >/dev/null || fail 'Project skill differs'
+done
+project_run
+[[ "$(grep -c '^unchanged ' "$output")" == 8 ]] || fail 'Repeat project setup changed components'
+cmp -s "$scratch/valid-project-config" "$project_target/.agent-workflow" || fail 'Installer changed project configuration'
+[[ "$(cat "$project_target/AGENTS.md")" == '# Test project workflow' ]] || fail 'Installer rewrote project instructions'
+echo 'PASS: project role coordination, required roles, project-local targets, safe config parsing, dependency installation, and repeat setup'
+
+coordinator_skills="$scratch/coordinator/skills"
+coordinator_agents="$scratch/coordinator/agents"
+bash "$scripts_dir/install.sh" --target "$coordinator_skills" --agents-target "$coordinator_agents" \
+    --agent workflow_coordinator --prefix sample >"$output"
+[[ -f "$coordinator_agents/sample_workflow_coordinator.toml" ]] || fail 'Coordinator selection did not install coordinator'
+[[ ! -e "$coordinator_agents/sample_backend_tester.toml" && ! -e "$coordinator_agents/sample_typescript_backend_coder.toml" && ! -e "$coordinator_skills/workflow-youtrack" ]] || fail 'Coordinator hard-coded worker or tracker dependencies'
+echo 'PASS: standalone coordinator does not choose workers or tracker'
 echo 'All installer checks passed.'

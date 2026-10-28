@@ -1,0 +1,17 @@
+# Copy to PROJECT/.agent-workflow, select roles, then run install.sh --project PROJECT.
+# Source names become PREFIX_NAME when installed. none explicitly disables a role.
+prefix=project
+role.coordinator=workflow_coordinator
+role.planner=roadmap_design
+role.coder=none
+role.tester=backend_tester
+role.documenter=none
+required_roles=coordinator,coder,tester
+stages=code,test,commit,verify_ticket,publish_pr
+base_branch=main
+branch_policy=ticket_branch
+documentation=when_required
+max_repair_rounds=3
+commit=explicit
+publish_pr=explicit
+merge=explicit
