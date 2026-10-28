@@ -142,4 +142,28 @@ printf '\nLocal edit\n' >> "$selected_skills/workflow-commit/SKILL.md"
 select_reject --agent roadmap_design --prefix fresh
 [[ ! -e "$selected_agents/fresh_roadmap_design.toml" ]] || fail 'Skill conflict allowed agent writes'
 echo 'PASS: selections, agent-only prefixes, unchanged instructions, shared skills, project coexistence, and combined conflict preflight'
+
+# Selecting a coder installs its shared skills, without selecting a tracker or another agent.
+coder_skills="$scratch/coder/skills"
+coder_agents="$scratch/coder/agents"
+coder_source="$scripts_dir/../agents/typescript_backend_coder.toml"
+bash "$scripts_dir/install.sh" --target "$coder_skills" --agents-target "$coder_agents" \
+    --agent typescript_backend_coder --prefix workout --dry-run >"$output"
+[[ ! -e "$coder_skills" && ! -e "$coder_agents" ]] || fail 'Coder preview wrote files'
+bash "$scripts_dir/install.sh" --target "$coder_skills" --agents-target "$coder_agents" \
+    --agent typescript_backend_coder --prefix workout >"$output"
+coder_installed="$coder_agents/workout_typescript_backend_coder.toml"
+grep -Fqx 'name = "workout_typescript_backend_coder"' "$coder_installed" || fail 'Incorrect coder identity'
+diff -u <(tail -n +2 "$coder_source") <(tail -n +2 "$coder_installed") || fail 'Coder instructions changed during installation'
+[[ ! -e "$coder_agents/workout_roadmap_design.toml" && ! -e "$coder_skills/workflow-youtrack" ]] || fail 'Coder selection installed unrelated components'
+for skill in ticket-writing workflow-pr workflow-commit; do
+    diff -qr "$source_dir/$skill" "$coder_skills/$skill" >/dev/null || fail 'Missing or different coder dependency'
+done
+bash "$scripts_dir/install.sh" --target "$coder_skills" --agents-target "$coder_agents" \
+    --agent typescript_backend_coder --prefix workout >"$output"
+[[ "$(grep -c '^unchanged ' "$output")" == 4 ]] || fail 'Repeat coder install changed files'
+bash "$scripts_dir/install.sh" --target "$coder_skills" --agents-target "$coder_agents" \
+    --agent typescript_backend_coder --agent roadmap_design --prefix workout >"$output"
+[[ -f "$coder_installed" && -f "$coder_agents/workout_roadmap_design.toml" ]] || fail 'Multiple-agent selection failed'
+echo 'PASS: coder selection, preview, prefix, intact instructions, dependencies, tracker independence, and repeat installation'
 echo 'All installer checks passed.'
