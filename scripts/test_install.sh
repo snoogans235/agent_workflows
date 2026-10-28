@@ -340,4 +340,102 @@ multi_run
 [[ "$(grep -c '^unchanged ' "$output")" == 7 ]] || fail 'Multi-agent dependencies were not deduplicated'
 cmp -s "$scratch/valid-multi-config" "$multi_project/.agent-workflow" || fail 'Multi-agent installer rewrote configuration'
 echo 'PASS: multiple candidates, scope/default routes, route order, membership validation, invalid lists, missing routes, and deduplicated installation'
+
+# Agent-context documentation remains independently selectable and project-routable.
+doc_skills="$scratch/documenter/skills"
+doc_agents="$scratch/documenter/agents"
+doc_source="$scripts_dir/../agents/agent_documenter.toml"
+bash "$scripts_dir/install.sh" --list >"$output"
+grep -Fqx 'agent_documenter' "$output" || fail 'Inventory omitted agent documenter'
+bash "$scripts_dir/install.sh" --target "$doc_skills" --agents-target "$doc_agents" \
+    --agent agent_documenter --prefix sample --dry-run >"$output"
+[[ ! -e "$doc_skills" && ! -e "$doc_agents" ]] || fail 'Documenter preview wrote files'
+bash "$scripts_dir/install.sh" --target "$doc_skills" --agents-target "$doc_agents" \
+    --agent agent_documenter --prefix sample >"$output"
+doc_installed="$doc_agents/sample_agent_documenter.toml"
+grep -Fqx 'name = "sample_agent_documenter"' "$doc_installed" || fail 'Incorrect documenter identity'
+diff -u <(tail -n +2 "$doc_source") <(tail -n +2 "$doc_installed") || fail 'Documenter instructions changed during installation'
+[[ ! -e "$doc_agents/sample_workflow_coordinator.toml" && ! -e "$doc_skills/workflow-youtrack" ]] || fail 'Documenter selection installed unrelated components'
+for skill in ticket-writing workflow-pr workflow-commit; do
+    diff -qr "$source_dir/$skill" "$doc_skills/$skill" >/dev/null || fail 'Missing documenter dependency'
+done
+bash "$scripts_dir/install.sh" --target "$doc_skills" --agents-target "$doc_agents" \
+    --agent agent_documenter --prefix sample >"$output"
+[[ "$(grep -c '^unchanged ' "$output")" == 4 ]] || fail 'Repeat documenter install changed files'
+# Add the real agents audience route to an isolated project; keep other project roles unchanged.
+sed -e 's/role.documenter=none/role.documenter=agent_documenter/' \
+    -e 's/stages=code,test,commit,verify_ticket,publish_pr/stages=code,test,commit,verify_ticket,documentation,publish_pr/' \
+    "$scratch/valid-project-config" > "$project_target/.agent-workflow"
+printf '\nroute.documenter.agents=agent_documenter\n' >> "$project_target/.agent-workflow"
+project_run
+[[ -f "$project_target/.codex/agents/sample_agent_documenter.toml" ]] || fail 'Project agents-audience route did not install documenter'
+project_run
+[[ "$(grep -c '^unchanged ' "$output")" == 9 ]] || fail 'Repeated documentation project setup changed components'
+echo 'PASS: agent documenter selection, preview, prefix, intact instructions, dependencies, tracker independence, and agents-audience project route'
+
+# Internal guides and agent context can be selected and routed independently.
+internal_skills="$scratch/internal-documenter/skills"
+internal_agents="$scratch/internal-documenter/agents"
+internal_source="$scripts_dir/../agents/internal_documenter.toml"
+bash "$scripts_dir/install.sh" --list >"$output"
+grep -Fqx 'internal_documenter' "$output" || fail 'Inventory omitted internal documenter'
+bash "$scripts_dir/install.sh" --target "$internal_skills" --agents-target "$internal_agents" \
+    --agent internal_documenter --prefix sample --dry-run >"$output"
+[[ ! -e "$internal_skills" && ! -e "$internal_agents" ]] || fail 'Internal documenter preview wrote files'
+bash "$scripts_dir/install.sh" --target "$internal_skills" --agents-target "$internal_agents" \
+    --agent internal_documenter --prefix sample >"$output"
+internal_installed="$internal_agents/sample_internal_documenter.toml"
+grep -Fqx 'name = "sample_internal_documenter"' "$internal_installed" || fail 'Incorrect internal documenter identity'
+diff -u <(tail -n +2 "$internal_source") <(tail -n +2 "$internal_installed") || fail 'Internal documenter instructions changed during install'
+[[ ! -e "$internal_agents/sample_agent_documenter.toml" && ! -e "$internal_skills/workflow-youtrack" ]] || fail 'Internal documenter selection installed unrelated components'
+for skill in ticket-writing workflow-pr workflow-commit; do
+    diff -qr "$source_dir/$skill" "$internal_skills/$skill" >/dev/null || fail 'Missing internal documenter dependency'
+done
+bash "$scripts_dir/install.sh" --target "$internal_skills" --agents-target "$internal_agents" \
+    --agent internal_documenter --prefix sample >"$output"
+[[ "$(grep -c '^unchanged ' "$output")" == 4 ]] || fail 'Repeat internal documenter install changed files'
+sed -e 's/role.documenter=none/role.documenter=agent_documenter,internal_documenter/' \
+    -e 's/stages=code,test,commit,verify_ticket,publish_pr/stages=code,test,commit,verify_ticket,documentation,publish_pr/' \
+    "$scratch/valid-project-config" > "$project_target/.agent-workflow"
+printf '\nroute.documenter.agents=agent_documenter\nroute.documenter.internal=internal_documenter\n' >> "$project_target/.agent-workflow"
+project_run
+for agent in agent_documenter internal_documenter; do
+    [[ -f "$project_target/.codex/agents/sample_$agent.toml" ]] || fail 'Project audience route did not install documenter'
+done
+project_run
+[[ "$(grep -c '^unchanged ' "$output")" == 10 ]] || fail 'Audience documentation dependencies were not deduplicated'
+echo 'PASS: internal documenter selection, prefix, unchanged instructions, dependencies, and separate agents/internal project routes'
+
+# User guides have their own agent and audience route.
+user_skills="$scratch/user-documenter/skills"
+user_agents="$scratch/user-documenter/agents"
+user_source="$scripts_dir/../agents/user_documenter.toml"
+bash "$scripts_dir/install.sh" --list >"$output"
+grep -Fqx 'user_documenter' "$output" || fail 'Inventory omitted user documenter'
+bash "$scripts_dir/install.sh" --target "$user_skills" --agents-target "$user_agents" \
+    --agent user_documenter --prefix sample --dry-run >"$output"
+[[ ! -e "$user_skills" && ! -e "$user_agents" ]] || fail 'User documenter preview wrote files'
+bash "$scripts_dir/install.sh" --target "$user_skills" --agents-target "$user_agents" \
+    --agent user_documenter --prefix sample >"$output"
+user_installed="$user_agents/sample_user_documenter.toml"
+grep -Fqx 'name = "sample_user_documenter"' "$user_installed" || fail 'Incorrect user documenter identity'
+diff -u <(tail -n +2 "$user_source") <(tail -n +2 "$user_installed") || fail 'User documenter instructions changed during install'
+[[ ! -e "$user_agents/sample_internal_documenter.toml" && ! -e "$user_skills/workflow-youtrack" ]] || fail 'User documenter selection installed unrelated components'
+for skill in ticket-writing workflow-pr workflow-commit; do
+    diff -qr "$source_dir/$skill" "$user_skills/$skill" >/dev/null || fail 'Missing user documenter dependency'
+done
+bash "$scripts_dir/install.sh" --target "$user_skills" --agents-target "$user_agents" \
+    --agent user_documenter --prefix sample >"$output"
+[[ "$(grep -c '^unchanged ' "$output")" == 4 ]] || fail 'Repeat user documenter install changed files'
+sed -e 's/role.documenter=none/role.documenter=agent_documenter,internal_documenter,user_documenter/' \
+    -e 's/stages=code,test,commit,verify_ticket,publish_pr/stages=code,test,commit,verify_ticket,documentation,publish_pr/' \
+    "$scratch/valid-project-config" > "$project_target/.agent-workflow"
+printf '\nroute.documenter.agents=agent_documenter\nroute.documenter.internal=internal_documenter\nroute.documenter.users=user_documenter\n' >> "$project_target/.agent-workflow"
+project_run
+for agent in agent_documenter internal_documenter user_documenter; do
+    [[ -f "$project_target/.codex/agents/sample_$agent.toml" ]] || fail 'Project audience route did not install documenter'
+done
+project_run
+[[ "$(grep -c '^unchanged ' "$output")" == 11 ]] || fail 'Three documentation audiences were not deduplicated'
+echo 'PASS: user documenter selection, prefix, unchanged instructions, dependencies, and all three audience routes'
 echo 'All installer checks passed.'

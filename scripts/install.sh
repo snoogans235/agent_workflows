@@ -195,6 +195,12 @@ for agent in ${agent_selected[@]+"${agent_selected[@]}"}; do
         workflow_coordinator) selected+=(ticket-writing workflow-pr) ;;
         typescript_backend_coder) selected+=(ticket-writing workflow-pr) ;;
         backend_tester) selected+=(ticket-writing workflow-pr) ;;
+        agent_documenter) selected+=(ticket-writing workflow-pr) ;;
+        internal_documenter) selected+=(ticket-writing workflow-pr) ;;
+        user_documenter) selected+=(ticket-writing workflow-pr) ;;
+
+
+
 
 
         *) fail "Unknown agent: $agent" ;;

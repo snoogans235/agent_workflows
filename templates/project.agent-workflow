@@ -11,7 +11,12 @@ required_roles=coordinator,coder,tester
 stages=code,test,commit,verify_ticket,publish_pr
 base_branch=main
 branch_policy=ticket_branch
+# Complete documentation after ticket verification, immediately before PR publication.
+# Check and commit documentation changes before publishing.
 documentation=when_required
+# An explicit documentation stage requires a selected documenter role:
+# stages=code,test,commit,verify_ticket,documentation,publish_pr
+# Route impacted audiences below; missing required coverage blocks PR readiness.
 max_repair_rounds=3
 commit=explicit
 publish_pr=explicit
@@ -23,3 +28,16 @@ merge=explicit
 # route.coder.frontend=typescript_frontend_coder
 # Define scope classification in AGENTS.md; configure tester routing independently.
 # route.coder.default=typescript_backend_coder is an optional unscoped-work fallback.
+
+# To select documentation for the agents audience, replace role.documenter=none above:
+# role.documenter=agent_documenter
+# route.documenter.agents=agent_documenter
+# To select both available documentation audiences, replace the role mapping above:
+# role.documenter=agent_documenter,internal_documenter
+# route.documenter.agents=agent_documenter
+# route.documenter.internal=internal_documenter
+# To select all three audiences, replace the role mapping above:
+# role.documenter=agent_documenter,internal_documenter,user_documenter
+# route.documenter.agents=agent_documenter
+# route.documenter.internal=internal_documenter
+# route.documenter.users=user_documenter
