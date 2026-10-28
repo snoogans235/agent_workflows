@@ -28,7 +28,7 @@ The agents use ticket-writing and workflow-pr, plus the integration skill for th
 
 The shared coordinator supplies delivery behavior; the consuming project selects the agents and policies. Its .agent-workflow file is the shared input to installation and runtime coordination, while AGENTS.md explains project-specific rules. An installed agent is not automatically selected, and a selected file is not proof the active chat can spawn it.
 
-To set up a new project, copy [templates/project.agent-workflow](templates/project.agent-workflow) to PROJECT/.agent-workflow, select its coder and other roles, and provide AGENTS.md. The template deliberately leaves the coder unset so the project must choose one. Use source agent names in role mappings; the installer adds the project prefix. Use none for an unconfigured optional role. required_roles must map to actual selections, and code/test/documentation stages require their corresponding roles. Tracker integrations remain explicit skill selections, such as skill.workflow-youtrack=enabled.
+To set up a new project, copy [templates/project.agent-workflow](templates/project.agent-workflow) to PROJECT/.agent-workflow, select its coder and other roles, and provide AGENTS.md. The template deliberately leaves the coder unset so the project must choose one. Use a source agent name or a comma-separated candidate list in each role mapping; the installer adds the project prefix to every selected agent. Use none for an unconfigured optional role. required_roles must map to actual selections, and code/test/documentation stages require their corresponding roles. Tracker integrations remain explicit skill selections, such as skill.workflow-youtrack=enabled.
 
 ```sh
 bash scripts/install.sh --project /path/to/project --dry-run
@@ -36,6 +36,24 @@ bash scripts/install.sh --project /path/to/project
 ```
 
 Project mode installs agents into PROJECT/.codex/agents and skills into PROJECT/.agents/skills. It reads configuration as data, never executes it, and does not rewrite AGENTS.md or create tracker settings. It rejects duplicate/unknown keys, missing required roles, unsupported stages, and manual selection/target overrides combined with --project. Existing manual installation remains available below. Re-running setup does not prune old installations; obsolete definitions may remain available but are not selected by the project mappings.
+
+### Multiple agents per role
+
+A role can have multiple candidates, with explicit routes by project-defined scope:
+
+```ini
+role.coder=typescript_backend_coder,typescript_frontend_coder
+route.coder.backend=typescript_backend_coder
+route.coder.frontend=typescript_frontend_coder
+```
+
+This is an illustrative backend/frontend mapping: a frontend agent has not been defined in this repository yet. All selected agents must exist in the catalog before installation succeeds. Define and register the frontend agent before enabling this example. No frontend behavior is supplied by the backend coder.
+
+Use route.ROLE.SCOPE for each candidate in a multi-agent role. Every candidate needs at least one route; routes must select a member of that role. Route declarations can precede or follow role declarations. Duplicate members, empty list entries, mixing none with agents, duplicate route keys, and missing or invalid routes are rejected before destination writes. An agent selected by multiple roles is installed once, and skill dependencies are also deduplicated. Existing single-agent mappings remain valid without routes.
+
+AGENTS.md defines how ticket scope, explicit assignments, and source boundaries correspond to scope labels. The coordinator chooses an eligible explicitly assigned agent or the matching route, never the first candidate by list order. A route.ROLE.default is an optional fallback for unscoped work only when no narrower scope can be established; an explicitly named but unmapped scope remains a gap. Coder and tester routes are independent selections and must both fit the assignment.
+
+For a ticket spanning backend and frontend, the coordinator bounds each assignment, establishes shared interfaces, file ownership, dependencies, an integration owner, and independent evidence for the combined result. Multiple candidates do not automatically imply parallel execution; the project/assignment must authorize it and ownership must permit it. Ambiguous routing returns for clarification. Configuration validation checks declarations; the coordinator performs routing at runtime rather than a deterministic script choosing workers.
 
 Supported stages are code, test, commit, verify_ticket, documentation, and publish_pr. The default sequence is code -> test -> commit -> verify_ticket -> publish_pr. The coordinator checks acceptance evidence for the committed candidate, returning defects to the responsible role and refreshing affected evidence after repairs. max_repair_rounds bounds repair attempts. Conditional required documentation must receive an explicit owner when no documentation agent is selected.
 

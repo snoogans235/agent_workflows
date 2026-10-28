@@ -1,5 +1,6 @@
 # Copy to PROJECT/.agent-workflow, select roles, then run install.sh --project PROJECT.
 # Source names become PREFIX_NAME when installed. none explicitly disables a role.
+# Roles accept one agent or comma-separated candidates; every multi-agent candidate needs a scope route.
 prefix=project
 role.coordinator=workflow_coordinator
 role.planner=roadmap_design
@@ -15,3 +16,10 @@ max_repair_rounds=3
 commit=explicit
 publish_pr=explicit
 merge=explicit
+
+# Illustrative only: define/register a frontend agent before enabling this mapping.
+# role.coder=typescript_backend_coder,typescript_frontend_coder
+# route.coder.backend=typescript_backend_coder
+# route.coder.frontend=typescript_frontend_coder
+# Define scope classification in AGENTS.md; configure tester routing independently.
+# route.coder.default=typescript_backend_coder is an optional unscoped-work fallback.

@@ -75,6 +75,9 @@ if [[ -n "$project" ]]; then
     keys=()
     role_names=()
     role_agents=()
+    route_roles=()
+    route_scopes=()
+    route_agents=()
     required_roles=''
     stages=''
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -91,10 +94,29 @@ if [[ -n "$project" ]]; then
             prefix) prefix="$value" ;;
             role.*)
                 role="${key#role.}"
-                [[ "$role" =~ ^[a-z][a-z0-9_]*$ && "$value" =~ ^[a-z][a-z0-9_]*$ ]] || fail "Invalid role mapping: $line"
+                [[ "$role" =~ ^[a-z][a-z0-9_]*$ ]] || fail "Invalid role name: $line"
+                [[ "$value" =~ ^[a-z][a-z0-9_]*(,[a-z][a-z0-9_]*)*$ ]] || fail "Invalid role agent list: $line"
                 role_names+=("$role")
                 role_agents+=("$value")
-                if [[ "$value" != none ]]; then agent_selected+=("$value"); fi ;;
+                if [[ "$value" != none ]]; then
+                    IFS=',' read -r -a members <<< "$value"
+                    seen_members=','
+                    for member in "${members[@]}"; do
+                        [[ "$member" != none ]] || fail 'none must be used alone for an unconfigured role'
+                        case "$seen_members" in *",$member,"*) fail "Duplicate agent in role $role: $member" ;; esac
+                        seen_members="$seen_members$member,"
+                        agent_selected+=("$member")
+                    done
+                fi ;;
+            route.*)
+                route_key="${key#route.}"
+                [[ "$route_key" =~ ^([a-z][a-z0-9_]*)\.([a-z][a-z0-9_]*)$ ]] || fail "Use route.ROLE.SCOPE for routing: $line"
+                route_role="${BASH_REMATCH[1]}"
+                route_scope="${BASH_REMATCH[2]}"
+                [[ "$value" =~ ^[a-z][a-z0-9_]*$ && "$value" != none ]] || fail "A route must select exactly one agent: $line"
+                route_roles+=("$route_role")
+                route_scopes+=("$route_scope")
+                route_agents+=("$value") ;;
             required_roles) required_roles="$value" ;;
             stages) stages="$value" ;;
             max_repair_rounds) [[ "$value" =~ ^[1-9][0-9]*$ ]] || fail 'max_repair_rounds must be a positive integer' ;;
@@ -107,6 +129,31 @@ if [[ -n "$project" ]]; then
     done < "$config"
     [[ -n "$prefix" && "$prefix" =~ ^[a-z][a-z0-9_]*$ ]] || fail 'Project prefix is missing or invalid'
     [[ -n "$required_roles" && -n "$stages" ]] || fail 'Project requires required_roles and stages'
+    # Resolve routes after all roles are read, regardless of declaration order.
+    for ((route_index=0; route_index<${#route_roles[@]}; route_index++)); do
+        found=false
+        for ((index=0; index<${#role_names[@]}; index++)); do
+            if [[ "${role_names[$index]}" == "${route_roles[$route_index]}" ]]; then
+                case ",${role_agents[$index]}," in
+                    *",${route_agents[$route_index]},"*) found=true ;;
+                esac
+            fi
+        done
+        [[ "$found" == true ]] || fail "Route ${route_roles[$route_index]}.${route_scopes[$route_index]} selects an agent outside that role: ${route_agents[$route_index]}"
+    done
+    # Every candidate in a multi-agent role needs an explicit scope or default route.
+    for ((index=0; index<${#role_names[@]}; index++)); do
+        if [[ "${role_agents[$index]}" == *,* ]]; then
+            IFS=',' read -r -a members <<< "${role_agents[$index]}"
+            for member in "${members[@]}"; do
+                found=false
+                for ((route_index=0; route_index<${#route_roles[@]}; route_index++)); do
+                    if [[ "${route_roles[$route_index]}" == "${role_names[$index]}" && "${route_agents[$route_index]}" == "$member" ]]; then found=true; fi
+                done
+                [[ "$found" == true ]] || fail "Multi-agent role ${role_names[$index]} requires a route for candidate: $member"
+            done
+        fi
+    done
     IFS=',' read -r -a required <<< "$required_roles"
     for role in "${required[@]}"; do
         found=false

@@ -268,4 +268,76 @@ bash "$scripts_dir/install.sh" --target "$coordinator_skills" --agents-target "$
 [[ -f "$coordinator_agents/sample_workflow_coordinator.toml" ]] || fail 'Coordinator selection did not install coordinator'
 [[ ! -e "$coordinator_agents/sample_backend_tester.toml" && ! -e "$coordinator_agents/sample_typescript_backend_coder.toml" && ! -e "$coordinator_skills/workflow-youtrack" ]] || fail 'Coordinator hard-coded worker or tracker dependencies'
 echo 'PASS: standalone coordinator does not choose workers or tracker'
+
+# A frontend agent exists only inside this fixture checkout, not in the product catalog.
+fixture_repo="$scratch/multi-role-source"
+mkdir -p "$fixture_repo"
+cp -R "$scripts_dir" "$scripts_dir/../agents" "$scripts_dir/../skills" "$fixture_repo/"
+sed 's/typescript_backend_coder/frontend_fixture_coder/g' "$fixture_repo/agents/typescript_backend_coder.toml" > "$fixture_repo/agents/frontend_fixture_coder.toml"
+awk '
+    { print }
+    /typescript_backend_coder\) selected\+=/ { print "        frontend_fixture_coder) selected+=(ticket-writing workflow-pr) ;;" }
+' "$fixture_repo/scripts/install.sh" > "$fixture_repo/scripts/install.sh.new"
+mv -- "$fixture_repo/scripts/install.sh.new" "$fixture_repo/scripts/install.sh"
+multi_project="$scratch/multi-role-project"
+mkdir -p "$multi_project"
+printf '# Multi-scope project\n' > "$multi_project/AGENTS.md"
+cat > "$multi_project/.agent-workflow" <<'CONFIG'
+prefix=multi
+role.coordinator=workflow_coordinator
+role.coder=typescript_backend_coder,frontend_fixture_coder
+role.tester=backend_tester
+role.documenter=none
+route.coder.backend=typescript_backend_coder
+route.coder.frontend=frontend_fixture_coder
+required_roles=coordinator,coder,tester
+stages=code,test,commit,verify_ticket,publish_pr
+base_branch=main
+max_repair_rounds=3
+CONFIG
+cp "$multi_project/.agent-workflow" "$scratch/valid-multi-config"
+multi_run() {
+    bash "$fixture_repo/scripts/install.sh" --project "$multi_project" "$@" >"$output" 2>&1 || { cat "$output" >&2; fail 'Multi-agent project install failed'; }
+}
+multi_reject() {
+    local status=0
+    bash "$fixture_repo/scripts/install.sh" --project "$multi_project" >"$output" 2>&1 || status=$?
+    [[ "$status" == 2 ]] || { cat "$output" >&2; fail "Expected multi-agent rejection, received $status"; }
+}
+multi_run --dry-run
+[[ ! -e "$multi_project/.codex" && ! -e "$multi_project/.agents" ]] || fail 'Multi-agent preview wrote files'
+for invalid_list in 'typescript_backend_coder,' ',typescript_backend_coder' 'typescript_backend_coder,,frontend_fixture_coder' 'none,typescript_backend_coder' 'typescript_backend_coder,typescript_backend_coder'; do
+    sed "s/role.coder=.*/role.coder=$invalid_list/" "$scratch/valid-multi-config" > "$multi_project/.agent-workflow"
+    multi_reject
+done
+sed '/route.coder.frontend=/d' "$scratch/valid-multi-config" > "$multi_project/.agent-workflow"
+multi_reject
+sed 's/route.coder.frontend=.*/route.coder.frontend=backend_tester/' "$scratch/valid-multi-config" > "$multi_project/.agent-workflow"
+multi_reject
+sed 's/route.coder.frontend=/route.unknown.frontend=/' "$scratch/valid-multi-config" > "$multi_project/.agent-workflow"
+multi_reject
+cp "$scratch/valid-multi-config" "$multi_project/.agent-workflow"
+printf '\nroute.coder.frontend=frontend_fixture_coder\n' >> "$multi_project/.agent-workflow"
+multi_reject
+# Invalid candidates still fail even when route membership is internally consistent.
+sed 's/frontend_fixture_coder/not_in_catalog/g' "$scratch/valid-multi-config" > "$multi_project/.agent-workflow"
+multi_reject
+[[ ! -e "$multi_project/.codex" && ! -e "$multi_project/.agents" ]] || fail 'Invalid multi-agent configuration wrote files'
+# Routes may precede roles. An explicit default is valid and remains a named selection.
+{
+    printf 'route.coder.backend=typescript_backend_coder\nroute.coder.default=frontend_fixture_coder\n'
+    sed '/^route\./d' "$scratch/valid-multi-config"
+} > "$multi_project/.agent-workflow"
+multi_run --dry-run
+cp "$scratch/valid-multi-config" "$multi_project/.agent-workflow"
+multi_run
+for agent in workflow_coordinator typescript_backend_coder frontend_fixture_coder backend_tester; do
+    installed="$multi_project/.codex/agents/multi_$agent.toml"
+    grep -Fqx "name = \"multi_$agent\"" "$installed" || fail 'Multi-agent candidate identity missing'
+    diff -u <(tail -n +2 "$fixture_repo/agents/$agent.toml") <(tail -n +2 "$installed") || fail 'Multi-agent instructions changed'
+done
+multi_run
+[[ "$(grep -c '^unchanged ' "$output")" == 7 ]] || fail 'Multi-agent dependencies were not deduplicated'
+cmp -s "$scratch/valid-multi-config" "$multi_project/.agent-workflow" || fail 'Multi-agent installer rewrote configuration'
+echo 'PASS: multiple candidates, scope/default routes, route order, membership validation, invalid lists, missing routes, and deduplicated installation'
 echo 'All installer checks passed.'
