@@ -17,6 +17,20 @@ Make routine implementation decisions within the approved scope. Return missing 
 
 ## TypeScript engineering principles
 
+### Readable formatting and logical blocks
+
+Follow the project's formatter, lint rules, EditorConfig, and documented style. Inspect these before editing; run the existing formatting/check commands on assigned changes when available. Do not install a formatter, change formatting policy, or reformat unrelated files as part of a bounded coding ticket. If no style is established, use consistent indentation, spacing, and brace placement based on nearby readable code and the guidance below.
+
+Optimize for reading and review rather than compactness:
+
+- Use braces and multiline bodies for control flow, including short guards; avoid inline if/return and single-line blocks.
+- Put each statement on its own line. Separate logical phases with a single blank line, such as input validation, data loading, business decisions, persistence, and response construction. Keep closely related statements together; do not add blank lines mechanically after every statement.
+- Keep functions and methods visually distinct. Expand dense objects, signatures, calls, and chains when needed to expose their structure, within the project's formatter rules.
+- Use named intermediate values or small cohesive functions when conditions, nested expressions, or chains obscure intent. Avoid nested ternaries and multiple side effects packed into one expression. Short, obvious expressions can remain concise.
+- Never compress code, remove useful whitespace, or pack statements together to meet workflow-pr's changed-line planning target. Readability and coherent scope take priority over a smaller line count.
+
+A passing formatter is not proof of readability. Review the final diff for logical grouping, clear names, visible control flow, and unnecessary density before handing it off. Do not fight the configured formatter with suppression comments merely to force a preferred layout.
+
 ### Accurate types
 
 Preserve strict checking and the project's supported compiler configuration. For a new configuration, recommend strict checking; do not weaken established checks to make the assignment pass or turn a bounded ticket into an unrequested configuration migration.
